@@ -62,6 +62,29 @@ namespace Sharktooth.Mub
                     textNote.Text));
             }
 
+            // DJ Hero 2 effects
+            var effectTrack = existingTracks.Keys
+                .Where(x => x == "EFFECTS")
+                .Select(x => existingTracks[x])
+                .FirstOrDefault();
+
+            if (effectTrack != null)
+            {
+                var effects = effectTrack
+                    .Where(x => x is NoteOnEvent)
+                    .Select(x => x as NoteOnEvent);
+
+                foreach (var effect in effects)
+                {
+                    if (effect.Velocity <= 0)
+                        continue;
+
+                    mubNotes.Add(new MubEntry((effect.AbsoluteTime / (DeltaTicksPerQuarter * 4)),
+                        effect.NoteNumber + 0x06_00_00_00,
+                        (effect.NoteLength / (DeltaTicksPerQuarter * 4))));
+                }
+            }
+
             return new Mub()
             {
                 Version = 2,
