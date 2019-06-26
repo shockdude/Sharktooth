@@ -89,7 +89,7 @@ namespace Sharktooth.Mub
                 float length = ar.ReadSingle();
                 int wordOffset = ar.ReadInt32();
 
-                mub.Entries.Add(new MubEntry(start, mod, length, wordOffset > 0 && words.ContainsKey(wordOffset) ? words[wordOffset] : ""));
+                mub.Entries.Add(new MubEntry(start, mod, length, wordOffset, wordOffset > 0 && words.ContainsKey(wordOffset) ? words[wordOffset] : ""));
             }
             
             return mub;
@@ -148,7 +148,7 @@ namespace Sharktooth.Mub
                         aw.Write((float)entry.Start);
                         aw.Write((int)entry.Modifier);
                         aw.Write((float)entry.Length);
-                        aw.Write(stringOffsets.ContainsKey(entry.Text) ? stringOffsets[entry.Text] : 0);
+                        aw.Write(stringOffsets.ContainsKey(entry.Text) ? stringOffsets[entry.Text] : entry.Data);
                     }
 
                     // Writes string blob
