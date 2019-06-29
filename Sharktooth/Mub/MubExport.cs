@@ -202,15 +202,18 @@ namespace Sharktooth.Mub
                 long start = NotePosToTicks(entry.Start);
                 long end = NotePosToTicks(entry.Start + entry.Length);
 
-                if ((entry.Modifier & 0xFF000000) == 0x06000000)
+                if ((entry.Modifier & 0xFF000000) == 0x06000000 || entry.Modifier == 0x05FFFFFF)
                 {
+                    // Filter effect doesn't actually need an effect note, but sometimes 0x05FFFFFF is used for Filter.
+                    // For the midi, using pitch 0x7F (127) for Filter is good enough.
+                    int effectMod = entry.Modifier & 0x7F;
                     if (effects == null)
                     {
                         effects = new List<MidiEvent>();
                         effects.Add(new NAudio.Midi.TextEvent("EFFECTS", MetaEventType.SequenceTrackName, 0));
                     }
-                    effects.Add(new NoteEvent(start, 1, MidiCommandCode.NoteOn, entry.Modifier & 0xFF, entry.Data + 1));
-                    effects.Add(new NoteEvent(end, 1, MidiCommandCode.NoteOff, entry.Modifier & 0xFF, entry.Data + 1));
+                    effects.Add(new NoteEvent(start, 1, MidiCommandCode.NoteOn, effectMod, entry.Data + 1));
+                    effects.Add(new NoteEvent(end, 1, MidiCommandCode.NoteOff, effectMod, entry.Data + 1));
                     continue;
                 }
             }
