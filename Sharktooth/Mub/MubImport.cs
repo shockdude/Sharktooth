@@ -164,14 +164,25 @@ namespace Sharktooth.Mub
                         0,
                         textNote.Text));
                 }
-                // Author
+                // Author / VisualMarkup text event
                 else if (textNote.MetaEventType == MetaEventType.Copyright)
                 {
+                    string textNoteText = textNote.Text;
+                    int textNoteValue;
+                    if (textNoteText.Substring(0,5).ToUpper() == "[ALT]")
+                    {
+                        textNoteText = textNoteText.Substring(5);
+                        textNoteValue = 0x0B_00_00_00;
+                    }
+                    else
+                    {
+                        textNoteValue = 0x0A_FF_FF_FF;
+                    }
                     mubNotes.Add(new MubEntry((float)NoteTicksToPos(textNote.AbsoluteTime),
-                    0x0A_FF_FF_FF,
+                    textNoteValue,
                     0.0f,
                     0,
-                    textNote.Text));
+                    textNoteText));
                 }
                 // BPM
                 // don't include if there are no tempomarkers for some reason, since we can't guarantee
@@ -218,6 +229,7 @@ namespace Sharktooth.Mub
                 double start = NoteTicksToPos(note.AbsoluteTime);
                 double end = NoteTicksToPos(note.AbsoluteTime + note.NoteLength);
                 int noteNumber = note.NoteNumber;
+                int channel = note.Channel;
                 string lyricString = "";
 
                 if (noteNumber == 3 || noteNumber == 4)
@@ -250,6 +262,25 @@ namespace Sharktooth.Mub
                         throw new Exception($"Lyric \"{lyricEvent.Text}\"not associated with a MIDI note: {NoteTicksToPos(lyricEvent.AbsoluteTime, false) }");
                     }
                 }
+
+                // channel 3 is the only channel where note 127 is legal (0x0200007F)
+                if (channel != 3 && noteNumber == 127)
+                {
+                    noteNumber = 0xFFFFFF;
+                }
+                if (channel > 3)
+                {
+                    if (channel == 4 && noteNumber < 127)
+                    {
+                        noteNumber += 128;
+                    }
+                    channel -= 2;
+                }
+                else
+                {
+                    channel -= 1;
+                }
+                noteNumber |= channel << 24;
 
                 mubNotes.Add(new MubEntry((float)start,
                     noteNumber,

@@ -126,54 +126,84 @@ namespace Sharktooth.Mub
             {
                 long start = NotePosToTicks(entry.Start);
                 long end = NotePosToTicks(entry.Start + entry.Length);
+                int channel = 1;
+                int category;
+                int noteMod;
+                int velocity;
 
-                // DJH2 effect type - 0x05FFFFFF through 0x06000009
-                // Should not be added to the notes track
-                if ((entry.Modifier & 0xFF000000) == 0x06000000
-                    || entry.Modifier == 0x05FFFFFF) continue;
-
-                // Add just the Chart BPM text event, ignore the tempo markers
-                if ((entry.Modifier & 0xFF000000) == 0x0B000000)
+                // DJH2 visual markup categories --> channel
+                category = (entry.Modifier >> 24) & 0xFF;
+                noteMod = entry.Modifier & 0xFF;
+                if (category > 0)
                 {
-                    if (entry.Modifier == 0x0B000002)
+                    if (category > 13)
                     {
-                        float chartBpm = BitConverter.ToSingle(BitConverter.GetBytes(entry.Data), 0);
-                        track.Add(new NAudio.Midi.TextEvent(chartBpm.ToString(), MetaEventType.CuePoint, 0));
+                        // 0xFFFFFFFF, ignore
+                        continue;
+                    }
+                    else if (category == 6 && noteMod != 0xFF || category == 5 && noteMod == 0xFF)
+                    {
+                        // effects notes, ignore
+                        continue;
+                    }
+                    else if (category >= 3)
+                    {
+                        channel = category + 2;
+                    }
+                    // category 2 has too many notetypes for 1 channel
+                    else if (category == 2 && noteMod >= 128)
+                    {
+                        channel = category + 2;
+                        noteMod -= 128;
+                    }
+                    else // category == 0 or 1 or 2 (with noteMod < 128)
+                    {
+                        channel = category + 1;
+                    }
+                }
+
+                // Add chart BPM text event
+                if (entry.Modifier == 0x0B000002)
+                {
+                    float chartBpm = BitConverter.ToSingle(BitConverter.GetBytes(entry.Data), 0);
+                    track.Add(new NAudio.Midi.TextEvent(chartBpm.ToString(), MetaEventType.CuePoint, 0));
+                    continue;
+                }
+                // Ignore tempo markers
+                if (entry.Modifier == 0x0B000001)
+                {
+                    continue;
+                }
+
+                // Text Event?
+                if (!string.IsNullOrEmpty(entry.Text))
+                {
+                    // Author / VisualMarkup text event
+                    if (entry.Modifier == 0x0AFFFFFF)
+                    {
+                        track.Add(new NAudio.Midi.TextEvent(entry.Text, MetaEventType.Copyright, start));
+                    }
+                    // section
+                    else if (entry.Modifier == 0x09FFFFFF)
+                    {
+                        track.Add(new NAudio.Midi.TextEvent(entry.Text, MetaEventType.TextEvent, start));
+                    }
+                    // alternate markup text event
+                    else if (entry.Modifier == 0x0B000000)
+                    {
+                        track.Add(new NAudio.Midi.TextEvent($"[ALT]{entry.Text}", MetaEventType.Copyright, start));
+                    }
+                    // unknown
+                    else
+                    {
+                        track.Add(new NAudio.Midi.TextEvent($"UNK_{entry.Modifier:X}_{entry.Text}", MetaEventType.Marker, start));
                     }
                     continue;
                 }
 
                 if ((entry.Modifier & 0xFFFFFF) == 0xFFFFFF)
                 {
-                    // Text Event?
-                    if (!string.IsNullOrEmpty(entry.Text))
-                    {
-                        // Author?
-                        if ((entry.Modifier & 0xFF000000) == 0x0A000000)
-                        {
-                            track.Add(new NAudio.Midi.TextEvent(entry.Text, MetaEventType.Copyright, 0));
-                        }
-                        // section
-                        else if ((entry.Modifier & 0xFF000000) == 0x09000000)
-                        {
-                            track.Add(new NAudio.Midi.TextEvent(entry.Text, MetaEventType.TextEvent, start));
-                        }
-                        // unknown
-                        else
-                        {
-                            track.Add(new NAudio.Midi.TextEvent($"UNK_{entry.Modifier:X}_{entry.Text}", MetaEventType.Marker, start));
-                        }
-                    }
-                    // 0xFFFFFFFF?
-                    else if ((entry.Modifier & 0xFF000000) == 0xFF000000)
-                    {
-                        // ignore
-                    }
-                    else
-                    {
-                        track.Add(new NAudio.Midi.TextEvent($"UNK_{entry.Modifier:X}", MetaEventType.Marker, start));
-                    }
-                    continue;
+                    noteMod = 127;
                 }
 
                 // Lyric Marker
@@ -199,8 +229,7 @@ namespace Sharktooth.Mub
                         track.Add(new NAudio.Midi.TextEvent(entry.Text, MetaEventType.Lyric, start));
                 }
 
-                int noteMod = entry.Modifier & 0xFF;
-                int velocity = entry.Data + 1;
+                velocity = entry.Data + 1;
                 if (velocity > 127)
                 {
                     velocity = 127;
@@ -209,8 +238,9 @@ namespace Sharktooth.Mub
                 {
                     velocity = 1;
                 }
-                track.Add(new NoteEvent(start, 1, MidiCommandCode.NoteOn, noteMod, velocity));
-                track.Add(new NoteEvent(end, 1, MidiCommandCode.NoteOff, noteMod, velocity));
+
+                track.Add(new NoteEvent(start, channel, MidiCommandCode.NoteOn, noteMod, velocity));
+                track.Add(new NoteEvent(end, channel, MidiCommandCode.NoteOff, noteMod, velocity));
             }
 
             track.Sort((x, y) =>
@@ -237,7 +267,7 @@ namespace Sharktooth.Mub
                 long start = NotePosToTicks(entry.Start);
                 long end = NotePosToTicks(entry.Start + entry.Length);
 
-                if ((entry.Modifier & 0xFF000000) == 0x06000000 || entry.Modifier == 0x05FFFFFF)
+                if ((entry.Modifier & 0xFFFFFF00) == 0x06000000 || entry.Modifier == 0x05FFFFFF)
                 {
                     // Filter effect doesn't actually need an effect note, but sometimes 0x05FFFFFF is used for Filter.
                     // For the midi, using pitch 0x7F (127) for Filter is good enough.
