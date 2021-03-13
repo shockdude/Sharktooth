@@ -280,13 +280,22 @@ namespace Sharktooth.Mub
                 {
                     channel -= 1;
                 }
+                // some channel 2 notes have priority and should appear before other channel 2 notes
+                int priority = 0;
+                int[] priorityNotes = { 21, 22, 23, 24, 43, 44, 48, 49, 51, 52, 53, 54, 56, 57, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 71, 72, 73, 74, 75, 76, 77, 78 };
+                if (channel == 2 && priorityNotes.Contains(noteNumber))
+                {
+                    priority = 1;
+                }
+
                 noteNumber |= channel << 24;
 
                 mubNotes.Add(new MubEntry((float)start,
                     noteNumber,
                     (float)(end - start),
                     note.Velocity - 1,
-                    lyricString));
+                    lyricString,
+                    priority));
             }
 
             // DJ Hero 2 effects
@@ -318,6 +327,7 @@ namespace Sharktooth.Mub
                 Entries = mubNotes
                     .OrderBy(x => x.Start)
                     .ThenByDescending(x => x.Modifier >> 24)
+                    .ThenByDescending(x => x.Priority)
                     .ThenBy(x => x.Modifier & 0xFF)
                     .ToList()
             };
